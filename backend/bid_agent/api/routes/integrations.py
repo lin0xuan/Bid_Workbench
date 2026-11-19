@@ -1,5 +1,5 @@
 """External integration status APIs (MinerU). Does not write .env files."""
-from fastapi import APIRouter, Depends
+from bid_agent.http.routing import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -23,16 +23,16 @@ def mineru_status(user: Principal = Depends(current_user)):
 @router.put('/mineru')
 def mineru_override(body: MinerUOverride, user: Principal = Depends(current_user)):
     if not user.is_admin:
-        from fastapi import HTTPException
-        raise HTTPException(403, '仅管理员可设置进程内 MinerU 覆盖')
+        from bid_agent.core.errors import ApiError
+        raise ApiError(403, '仅管理员可设置进程内 MinerU 覆盖')
     return mineru_config.set_runtime_override(token=body.token, timeout=body.timeout)
 
 
 @router.delete('/mineru')
 def mineru_clear(user: Principal = Depends(current_user)):
     if not user.is_admin:
-        from fastapi import HTTPException
-        raise HTTPException(403, '仅管理员可清除进程内 MinerU 覆盖')
+        from bid_agent.core.errors import ApiError
+        raise ApiError(403, '仅管理员可清除进程内 MinerU 覆盖')
     return mineru_config.clear_runtime_override()
 
 

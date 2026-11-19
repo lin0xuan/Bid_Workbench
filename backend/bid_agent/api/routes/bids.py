@@ -1,6 +1,7 @@
 """Bid outline versions, section edits, and DOCX export."""
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends
+from bid_agent.http.routing import FileResponse
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -58,7 +59,7 @@ def outline_from_requirements(
             require_gate=True,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/projects/{project_id}/bid-versions')
@@ -96,7 +97,7 @@ def patch_section(
             mark_generate_gate=body.mark_generate_gate,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.post('/bid-sections/{section_id}/seed-placeholder')
@@ -111,7 +112,7 @@ def seed_section(
             section_id, user, overwrite=payload.overwrite,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.post('/bid-sections/{section_id}/generate-from-evidence')
@@ -130,7 +131,7 @@ def generate_section_from_evidence(
             use_llm=payload.use_llm,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/export-templates')
@@ -152,7 +153,7 @@ def create_export(project_id: str, body: ExportBody, user: Principal = Depends(c
             convert_pdf=body.convert_pdf,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/projects/{project_id}/exports')

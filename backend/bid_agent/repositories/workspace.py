@@ -20,10 +20,30 @@ def check_access(conn, project_id: str, user: Principal, *, write=False, owner=F
 def create_project(title: str, user: Principal) -> dict:
     project_id, timestamp = new_id('prj'), now()
     with transaction(immediate=True) as conn:
-        conn.execute('INSERT INTO projects(id,project_name,status,created_at,updated_at) VALUES(?,?,?,?,?)',
-                     (project_id, title, '待解析', timestamp, timestamp))
+        if _orm_available():
+            from bid_agent.apps.projects.models import Project
+            Project.objects.create(
+                id=project_id,
+                project_name=title,
+                status='待解析',
+                created_at=timestamp,
+                updated_at=timestamp,
+            )
+        else:
+            conn.execute(
+                'INSERT INTO projects(id,project_name,status,created_at,updated_at) VALUES(?,?,?,?,?)',
+                (project_id, title, '待解析', timestamp, timestamp),
+            )
         conn.execute('INSERT INTO project_members VALUES(?,?,?)', (project_id, user.id, 'owner'))
         return dict(conn.execute('SELECT * FROM projects WHERE id=?', (project_id,)).fetchone())
+
+
+def _orm_available() -> bool:
+    try:
+        from django.apps import apps
+    except ImportError:
+        return False
+    return apps.ready
 
 
 def list_projects(user: Principal) -> list[dict]:

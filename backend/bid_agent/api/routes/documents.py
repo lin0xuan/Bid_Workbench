@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import AsyncIterator, Optional
-from fastapi import File, Form, UploadFile
-from fastapi.responses import StreamingResponse
+from bid_agent.http.routing import File, Form, UploadFile
+from bid_agent.http.routing import StreamingResponse
 from bid_agent.analysis.service import analyze_bid_document
 from bid_agent.review.content_review import build_content_review
 from bid_agent.parsing.document_parser import parse_bid_document, split_bid_markdown_sections
@@ -16,7 +16,7 @@ from bid_agent.infrastructure.database import save_analysis_result
 from bid_agent.analysis.cleaner import clean_analysis_dict
 from bid_agent.infrastructure.llm_client import LLM_Invoke
 from bid_agent.core.model_config import resolve_llm_selection
-from fastapi import APIRouter
+from bid_agent.http.routing import APIRouter
 from bid_agent.services.analysis_workflow import (
     _analyze_sections,
     _apply_local_module_fallbacks,

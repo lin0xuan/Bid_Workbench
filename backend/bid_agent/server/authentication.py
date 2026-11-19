@@ -1,5 +1,5 @@
 """Session authentication backed by the existing cookie and CSRF checks."""
-from fastapi import HTTPException
+from bid_agent.core.errors import ApiError
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 
@@ -16,7 +16,7 @@ class WorkspaceAuthentication(BaseAuthentication):
     def authenticate(self, request):
         try:
             principal = current_user(AdaptedRequest(request))
-        except HTTPException as exc:
+        except ApiError as exc:
             if exc.status_code == 401:
                 raise AuthenticationFailed(exc.detail) from exc
             raise PermissionDenied(exc.detail) from exc

@@ -1,7 +1,8 @@
 """Project stage gate API."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -46,7 +47,7 @@ def pass_stage(project_id: str, stage: str, body: StageBody | None = None, user:
                 force_skip_high_risk=payload.force_skip_high_risk,
             )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
     return item
 
 
@@ -55,5 +56,5 @@ def reset_stage(project_id: str, stage: str, user: Principal = Depends(current_u
     try:
         item = stages.mark_stage(project_id, stage, user, status='pending', notes='')
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
     return item

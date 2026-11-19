@@ -1,9 +1,9 @@
 """Extracted from the original API; public request contracts are retained."""
 from typing import Optional
-from fastapi import HTTPException
+from bid_agent.core.errors import ApiError
 from bid_agent.infrastructure.database import DB_PATH, list_database_tables
 from bid_agent.repositories.projects import delete_project, delete_project_record, get_project_detail, list_projects, update_record_confirmed_status
-from fastapi import APIRouter
+from bid_agent.http.routing import APIRouter
 from bid_agent.services.analysis_workflow import (
     _build_llm,
     _raise_api_error,
@@ -41,7 +41,7 @@ def get_project(project_id: str) -> dict:
     except Exception as exc:
         _raise_api_error(exc)
     if not detail:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise ApiError(status_code=404, detail="Project not found")
     return detail
 
 

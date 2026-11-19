@@ -1,5 +1,6 @@
 """Requirement response matrix API (B13 draft)."""
-from fastapi import APIRouter, Depends, HTTPException
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -24,7 +25,7 @@ def rebuild_matrix(bid_version_id: str, user: Principal = Depends(current_user))
     try:
         return response_matrix.rebuild_matrix(bid_version_id, user)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/bid-versions/{bid_version_id}/response-matrix')
@@ -32,7 +33,7 @@ def get_matrix(bid_version_id: str, user: Principal = Depends(current_user)):
     try:
         return response_matrix.get_matrix(bid_version_id, user)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/bid-versions/{bid_version_id}/missing-materials')
@@ -64,4 +65,4 @@ def patch_response(
             is_mandatory=body.is_mandatory,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc

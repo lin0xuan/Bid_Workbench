@@ -4,16 +4,24 @@ import json
 import types
 from typing import Union, get_args, get_origin
 
-from fastapi import HTTPException
-from fastapi.params import Depends, File, Form, Header, Path, Query
-from fastapi.routing import APIRoute
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import (
+    Depends,
+    File,
+    FileResponse,
+    Form,
+    Header,
+    Path,
+    Query,
+    Response as SideResponse,
+    Route,
+    StreamingResponse,
+)
 from pydantic import BaseModel, ValidationError
 from rest_framework.exceptions import ValidationError as ApiValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from starlette.responses import FileResponse, StreamingResponse
-from starlette.responses import Response as SideResponse
 
 from bid_agent.core.security import current_user, legacy_admin
 from bid_agent.repositories.platform import ConflictError, ForbiddenError, NotFoundError
@@ -40,7 +48,7 @@ class UploadedFile:
 def iter_routes(router):
     """Yield concrete HTTP routes, skipping automatic head and options."""
     for route in router.routes:
-        if isinstance(route, APIRoute):
+        if isinstance(route, Route):
             yield route
 
 
@@ -108,7 +116,7 @@ def _parse_model(model, request, optional):
     serializer = serializer_for(model)(data=data)
     if not serializer.is_valid():
         detail = serializer.errors.get('detail', serializer.errors)
-        raise HTTPException(422, detail)
+        raise ApiError(422, detail)
     return serializer.validated_data
 
 
@@ -166,7 +174,7 @@ def _check_bounds(marker, value):
 def _uploaded(request, name):
     uploaded = _django_http(request).FILES.get(name)
     if uploaded is None:
-        raise HTTPException(422, '缺少上传文件')
+        raise ApiError(422, '缺少上传文件')
     return UploadedFile(uploaded)
 
 
@@ -175,7 +183,7 @@ def _form_value(request, name, marker, annotation):
     raw = _django_http(request).POST.get(name)
     if raw is None:
         if default is inspect.Signature.empty:
-            raise HTTPException(422, f'缺少字段 {name}')
+            raise ApiError(422, f'缺少字段 {name}')
         return default
     return _coerce(annotation, raw, marker)
 
@@ -195,7 +203,7 @@ def _header_value(request, name, marker, annotation):
     raw = request.headers.get(_alias(marker, name))
     if raw in (None, ''):
         if default is inspect.Signature.empty:
-            raise HTTPException(422, f'缺少请求头 {_alias(marker, name)}')
+            raise ApiError(422, f'缺少请求头 {_alias(marker, name)}')
         return default
     return _coerce(annotation, raw, marker)
 
@@ -207,7 +215,7 @@ def _dependency_value(request, marker):
     if dependency is legacy_admin:
         principal = principal_of(request.user)
         if principal is None or not principal.is_admin:
-            raise HTTPException(403, '旧版接口仅供管理员使用，请使用文档工作台')
+            raise ApiError(403, '旧版接口仅供管理员使用，请使用文档工作台')
         return principal
     return dependency(AdaptedRequest(request))
 
@@ -350,7 +358,7 @@ def perform(route, request, path_params):
     """Run one operation and map domain errors onto the public contract."""
     try:
         result, side = call_endpoint(route, request, path_params)
-    except HTTPException as exc:
+    except ApiError as exc:
         return Response({'detail': exc.detail}, status=exc.status_code)
     except ApiValidationError as exc:
         return Response({'detail': exc.detail}, status=422)

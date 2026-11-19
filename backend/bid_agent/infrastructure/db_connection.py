@@ -8,6 +8,7 @@ advisory lock, including across API/worker/dispatcher processes.
 from contextlib import contextmanager
 from functools import lru_cache
 import os
+from pathlib import Path
 import sqlite3
 
 from sqlalchemy import create_engine, text
@@ -17,6 +18,25 @@ from bid_agent.core.settings import DATABASE_URL, DB_PATH
 
 WRITE_LOCK = 82470801
 SCHEMA_REVISION = 'b08_0001'
+_SHARED = False
+
+
+def enable_shared_transactions():
+    """After schema setup, repository SQL joins the Django transaction."""
+    global _SHARED
+    _SHARED = True
+
+
+def _shared_database(db_path):
+    if not _SHARED:
+        return False
+    if is_postgres():
+        return True
+    target = DB_PATH if db_path is None else db_path
+    try:
+        return Path(target).resolve() == Path(DB_PATH).resolve()
+    except OSError:
+        return False
 
 
 def is_postgres() -> bool:
@@ -116,8 +136,115 @@ class Connection:
         return Result(self.connection.exec_driver_sql(statement, values))
 
 
+class _DjangoCursor:
+    """PostgreSQL cursor results shaped like the existing row dictionaries."""
+
+    def __init__(self, cursor):
+        self.cursor = cursor
+        self.rowcount = cursor.rowcount
+        description = cursor.description or []
+        self.columns = [column[0] for column in description]
+
+    def _row(self, values):
+        if values is None:
+            return None
+        return Row(dict(zip(self.columns, values)))
+
+    def fetchone(self):
+        return self._row(self.cursor.fetchone())
+
+    def fetchall(self):
+        return [self._row(values) for values in self.cursor.fetchall()]
+
+    def __iter__(self):
+        return (self._row(values) for values in self.cursor)
+
+
+class _SqliteConnection:
+    """Keep dictionary rows after the ORM has used the same connection."""
+
+    def __init__(self, raw):
+        self.raw = raw
+
+    def execute(self, sql, parameters=()):
+        self.raw.row_factory = sqlite3.Row
+        return self.raw.execute(sql, parameters)
+
+    def executescript(self, script):
+        self.raw.row_factory = sqlite3.Row
+        return self.raw.executescript(script)
+
+
+class _DjangoConnection:
+    def execute(self, sql, parameters=()):
+        from django.db import connection
+
+        cursor = connection.cursor()
+        if isinstance(parameters, dict):
+            statement = _bind_named(sql)
+            cursor.execute(statement, parameters)
+        else:
+            statement, values = bind_qmarks(sql, parameters)
+            cursor.execute(statement, values)
+        return _DjangoCursor(cursor)
+
+
+def _bind_named(sql):
+    output = []
+    quote = None
+    index = 0
+    while index < len(sql):
+        char = sql[index]
+        if quote:
+            output.append(char)
+            if char == quote:
+                quote = None
+        elif char in {"'", '"'}:
+            quote = char
+            output.append(char)
+        elif char == ':' and index + 1 < len(sql) and (sql[index + 1].isalnum() or sql[index + 1] == '_'):
+            end = index + 1
+            while end < len(sql) and (sql[end].isalnum() or sql[end] == '_'):
+                end += 1
+            output.append(f'%({sql[index + 1:end]})s')
+            index = end
+            continue
+        elif char == '%':
+            output.append('%%')
+        else:
+            output.append(char)
+        index += 1
+    return ''.join(output)
+
+
+@contextmanager
+def _shared_transaction(immediate):
+    from django.db import connection, transaction as django_transaction
+    from django.db.utils import IntegrityError as DjangoIntegrityError
+
+    try:
+        with django_transaction.atomic():
+            connection.ensure_connection()
+            if is_postgres():
+                if immediate:
+                    with connection.cursor() as cursor:
+                        cursor.execute('SELECT pg_advisory_xact_lock(%s)', [WRITE_LOCK])
+                yield _DjangoConnection()
+            else:
+                raw = connection.connection
+                raw.row_factory = sqlite3.Row
+                raw.execute('PRAGMA foreign_keys=ON')
+                yield _SqliteConnection(raw)
+    except DjangoIntegrityError as exc:
+        raise sqlite3.IntegrityError('Database integrity constraint failed') from exc
+
+
 @contextmanager
 def transaction(db_path=DB_PATH, *, immediate=False):
+    if _shared_database(db_path):
+        with _shared_transaction(immediate) as conn:
+            yield conn
+        return
     if is_postgres():
         try:
             with postgres_engine().begin() as raw:

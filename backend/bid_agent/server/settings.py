@@ -83,6 +83,10 @@ def _database():
         return {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': str(DB_PATH),
+            'OPTIONS': {
+                'timeout': 30,
+                'transaction_mode': 'IMMEDIATE',
+            },
         }
     parsed = urlparse(DATABASE_URL.replace('postgresql+psycopg://', 'postgresql://', 1))
     return {

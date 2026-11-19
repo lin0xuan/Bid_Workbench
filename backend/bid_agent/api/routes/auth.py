@@ -4,7 +4,8 @@ import sqlite3
 import time
 from dataclasses import asdict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -36,20 +37,20 @@ def auth_status():
 @router.post('/login')
 def login(body: Credentials, request: Request, response: Response):
     if not env_bool('BID_AUTH_ENABLED'):
-        raise HTTPException(409, '当前为本机单用户模式，无需登录')
+        raise ApiError(409, '当前为本机单用户模式，无需登录')
     key = (request.client.host if request.client else '', body.username)
     count, until = _failures.get(key, (0, 0))
     if until < time.time():
         count = 0
     if count >= 10:
-        raise HTTPException(429, '登录失败次数过多，请五分钟后重试')
+        raise ApiError(429, '登录失败次数过多，请五分钟后重试')
     with transaction() as conn:
         row = conn.execute("SELECT * FROM users WHERE username=? AND id!='local'", (body.username,)).fetchone()
         if not row or not verify_password(body.password, row['password_hash']):
             if len(_failures) >= 1024:
                 _failures.pop(next(iter(_failures)))
             _failures[key] = (count+1, time.time()+300)
-            raise HTTPException(401, '用户名或密码错误')
+            raise ApiError(401, '用户名或密码错误')
         _failures.pop(key, None)
         token = secrets.token_urlsafe(32)
         conn.execute('DELETE FROM sessions WHERE expires_at<?', (time.time(),))
@@ -78,12 +79,12 @@ def logout(request: Request, response: Response, user: Principal = Depends(curre
 @router.post('/users', status_code=201)
 def create_user(body: NewUser, actor: Principal = Depends(legacy_admin)):
     if body.username == '__local__':
-        raise HTTPException(422, '保留用户名')
+        raise ApiError(422, '保留用户名')
     user_id = new_id('usr')
     try:
         with transaction() as conn:
             conn.execute('INSERT INTO users VALUES(?,?,?,?,?)',
                          (user_id, body.username, hash_password(body.password), body.is_admin, now()))
     except sqlite3.IntegrityError as exc:
-        raise HTTPException(409, '用户名已存在') from exc
+        raise ApiError(409, '用户名已存在') from exc
     return {'id': user_id, 'username': body.username, 'is_admin': body.is_admin}

@@ -5,7 +5,7 @@ import os
 import secrets
 import time
 
-from fastapi import HTTPException, Request
+from bid_agent.core.errors import ApiError
 
 from bid_agent.core.settings import env_bool
 from bid_agent.core.identity import Principal
@@ -56,7 +56,7 @@ def bootstrap_identity() -> None:
                      (new_id('usr'), username, hash_password(password), 1, now()))
 
 
-def current_user(request: Request) -> Principal:
+def current_user(request) -> Principal:
     if not env_bool('BID_AUTH_ENABLED'):
         return Principal('local', '__local__', True)
     token = request.cookies.get(COOKIE_NAME, '')
@@ -65,15 +65,15 @@ def current_user(request: Request) -> Principal:
             WHERE s.token_hash=? AND s.expires_at>? AND u.id!='local' ''',
                            (token_hash(token), time.time())).fetchone()
     if not row:
-        raise HTTPException(401, '请先登录')
+        raise ApiError(401, '请先登录')
     if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
         if not hmac.compare_digest(request.headers.get('X-CSRF-Token', ''), csrf_token(token)):
-            raise HTTPException(403, 'CSRF 校验失败，请刷新后重试')
+            raise ApiError(403, 'CSRF 校验失败，请刷新后重试')
     return Principal(row['id'], row['username'], bool(row['is_admin']))
 
 
-def legacy_admin(request: Request) -> Principal:
+def legacy_admin(request) -> Principal:
     user = current_user(request)
     if not user.is_admin:
-        raise HTTPException(403, '旧版接口仅供管理员使用，请使用文档工作台')
+        raise ApiError(403, '旧版接口仅供管理员使用，请使用文档工作台')
     return user

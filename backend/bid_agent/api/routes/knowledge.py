@@ -2,7 +2,7 @@
 from typing import Optional
 from bid_agent.infrastructure.database import DB_PATH, KNOWLEDGE_TYPES
 from bid_agent.repositories.knowledge import delete_knowledge_entry, export_knowledge_store, import_knowledge_store, list_knowledge_entries, upsert_knowledge_entry
-from fastapi import APIRouter
+from bid_agent.http.routing import APIRouter
 from bid_agent.services.analysis_workflow import (
     _raise_api_error,
 )

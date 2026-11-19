@@ -20,11 +20,11 @@ class WorkspaceUserMiddleware(MiddlewareMixin):
         current = getattr(request, 'user', None)
         if current is not None and getattr(current, 'is_authenticated', False):
             return
-        from fastapi import HTTPException
+        from bid_agent.core.errors import ApiError
 
         from bid_agent.core.security import current_user
 
         try:
             request.user = SessionUser(current_user(AdaptedRequest(request)))
-        except HTTPException:
+        except ApiError:
             return

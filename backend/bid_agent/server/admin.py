@@ -4,9 +4,9 @@ from django.contrib.admin import AdminSite
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.utils.html import escape
-from fastapi import HTTPException
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import Response as SideResponse
 from pydantic import ValidationError
-from starlette.responses import Response as SideResponse
 
 from bid_agent.api.routes.auth import Credentials
 from bid_agent.api.routes.auth import login as login_account
@@ -111,7 +111,7 @@ class WorkspaceAdminSite(AdminSite):
             return True
         try:
             principal = current_user(AdaptedRequest(request))
-        except HTTPException:
+        except ApiError:
             return False
         return bool(principal.is_admin)
 
@@ -130,7 +130,7 @@ class WorkspaceAdminSite(AdminSite):
                     AdaptedRequest(request),
                     side,
                 )
-            except (HTTPException, ValidationError) as exc:
+            except (ApiError, ValidationError) as exc:
                 detail = getattr(exc, 'detail', '登录失败')
                 message = escape(detail if isinstance(detail, str) else '登录失败')
             else:

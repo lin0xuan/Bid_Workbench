@@ -3,7 +3,7 @@ import json
 import os
 import traceback
 from typing import List, Optional
-from fastapi import HTTPException
+from bid_agent.core.errors import ApiError
 from bid_agent.analysis.prompts import build_business_content_messages_from_sections, build_business_scoring_messages_from_sections, build_global_context_messages_from_sections, build_project_overview_text_from_global_context, build_project_overview_messages_from_sections, build_qualification_compliance_messages_from_sections, build_technical_scoring_messages_from_sections
 from bid_agent.analysis.service import BidAnalysisResult
 from bid_agent.parsing.document_parser import BidDocumentSection
@@ -20,10 +20,10 @@ def _raise_api_error(exc: Exception) -> None:
     from bid_agent.repositories.platform import ConflictError, ForbiddenError, NotFoundError
     if isinstance(exc, (ConflictError, ForbiddenError, NotFoundError)):
         raise exc
-    if isinstance(exc, HTTPException):
+    if isinstance(exc, ApiError):
         raise exc
     error_type, message, hint = _classify_exception(exc)
-    raise HTTPException(
+    raise ApiError(
         status_code=500,
         detail={
             "type": error_type,

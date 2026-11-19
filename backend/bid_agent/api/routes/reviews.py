@@ -1,7 +1,8 @@
 """Compliance review runs, finding decisions, approvals and audit."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -41,7 +42,7 @@ def start_review(project_id: str, body: ReviewBody | None = None, user: Principa
             use_llm=payload.use_llm,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/projects/{project_id}/review-runs')
@@ -66,7 +67,7 @@ def approve_run(run_id: str, body: ApproveBody | None = None, user: Principal = 
             force=payload.force,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/projects/{project_id}/review-findings')
@@ -97,7 +98,7 @@ def decide(finding_id: str, body: DecideBody, user: Principal = Depends(current_
             finding_id, user, decision_status=body.decision_status, notes=body.notes,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/review-findings/{finding_id}/history')

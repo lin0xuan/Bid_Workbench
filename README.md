@@ -119,7 +119,7 @@ Bid_Agent/
 ```mermaid
 flowchart LR
     User[浏览器 / 可选 Electron] --> Web[Nginx · web]
-    Web -->|/api| API[FastAPI · api]
+    Web -->|/api| API[Django / DRF · api]
     API -->|原件保存 / 下载| Files[(原件持久卷)]
     API -->|项目 / 版本 / 任务 / outbox| DB[(SQLite 或 PostgreSQL)]
     DB --> Dispatcher[outbox · dispatcher]
@@ -132,7 +132,7 @@ flowchart LR
     Legacy --> AI[可选 LLM / 向量检索]
 ```
 
-默认 `docker compose` 包含 **web、api、redis、worker、dispatcher 五个服务**，数据库是 SQLite，只有 web 发布宿主机端口。浏览器通过同源 `/api` 访问后端，API、Worker 和 Dispatcher 共用应用镜像及业务数据卷。
+默认 `docker compose` 包含 **web、api、redis、worker、dispatcher 五个服务**，数据库是 SQLite，只有 web 发布宿主机端口。浏览器通过同源 `/api` 访问后端。API 进程是 Django / DRF：校验会话和项目权限，业务写入进入同一个 Django 事务。Repository 里的 SQL 和 ORM 使用这一条连接，一起提交或回滚。API、Worker 和 Dispatcher 共用应用镜像及业务数据卷。
 
 加上 `compose.postgres.yaml` 后，额外启动本机容器里的 PostgreSQL 和一次性迁移。数据库不映射到宿主机端口。连接串里的主机名 `postgres` 是 Compose 服务名，不是另一台云数据库。
 
@@ -143,8 +143,8 @@ flowchart LR
 | 层级        | 技术                                      | 职责                                     |
 | ----------- | ----------------------------------------- | ---------------------------------------- |
 | Web 界面    | HTML、CSS、JavaScript                     | 文档工作台、解析结果与原分析界面         |
-| 后端 API    | Python、FastAPI、Pydantic                 | 请求校验、登录、项目权限和业务接口       |
-| 数据访问    | Repository、SQLite WAL 或 PostgreSQL      | 项目、知识、版本、任务、事件和 outbox    |
+| 后端 API    | Python、Django、DRF、Pydantic             | 请求校验、登录、项目权限和业务接口       |
+| 数据访问    | Django ORM、Repository、SQLite 或 PostgreSQL | 同一事务里的项目、版本、任务和 outbox    |
 | 任务系统    | Celery、Redis、独立 Dispatcher            | 消息投递、后台执行、心跳与恢复           |
 | 原件存储    | LocalObjectStore、SHA-256                 | 持久化原件、内容寻址和下载校验           |
 | 文档处理    | pdfplumber、PyMuPDF、docx2python          | 本地 PDF／DOCX 解析与结构转换            |
@@ -396,7 +396,7 @@ python -m pytest -q
 ruff check backend tests scripts
 ```
 
-推荐先使用 Compose 调试完整链路。宿主机分别运行 API、Worker 和 Dispatcher 时，须配置一致的数据库、原件目录及 Redis 地址，并先完成 API 初始化；仅启动 uvicorn 不会执行后台解析任务。具体启动方式见[本地调试说明](docs/deployment/docker.md#9-本地调试后台任务)。
+推荐先使用 Compose 调试完整链路。宿主机分别运行 API、Worker 和 Dispatcher 时，须配置一致的数据库、原件目录及 Redis 地址，并先完成 API 初始化；只启动 ASGI 进程不会执行后台解析任务。接口说明见 `/api/docs`，机器可读清单见 `/api/openapi.json`。具体启动方式见[本地调试说明](docs/deployment/docker.md#9-本地调试后台任务)。
 
 需要桌面窗口时，在服务已启动的前提下执行：
 

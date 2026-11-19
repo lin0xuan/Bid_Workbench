@@ -3,8 +3,9 @@ import asyncio
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends, File, Form, Header, Query, Request, Response, UploadFile
+from bid_agent.http.routing import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -35,7 +36,7 @@ def projects(user: Principal = Depends(current_user)):
 def create_project(body: ProjectCreate, user: Principal = Depends(current_user)):
     title = body.title.strip()
     if not title:
-        raise HTTPException(422, '项目名称不能为空')
+        raise ApiError(422, '项目名称不能为空')
     return workspace.create_project(title, user)
 
 
@@ -61,9 +62,9 @@ def upload(project_id: str, response: Response, file: UploadFile = File(...),
     try:
         stored = object_store.put(file.file, file.filename or '')
     except FileTooLarge as exc:
-        raise HTTPException(413, str(exc)) from exc
+        raise ApiError(413, str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+        raise ApiError(422, str(exc)) from exc
     version, created = workspace.save_version(project_id, user, stored, document_id=document_id,
         title=title.strip(), kind=kind, parent_document_id=parent_document_id)
     version.pop('object_key', None)
@@ -126,7 +127,7 @@ async def event_stream(job_id: str, request: Request, after: int = Query(default
     try:
         cursor = max(after, int(last_event_id or 0))
     except ValueError as exc:
-        raise HTTPException(422, 'Last-Event-ID 必须是事件序号') from exc
+        raise ApiError(422, 'Last-Event-ID 必须是事件序号') from exc
 
     async def generate():
         nonlocal cursor
@@ -136,7 +137,7 @@ async def event_stream(job_id: str, request: Request, after: int = Query(default
                 current_user(request)
                 batch = jobs.events(job_id, user, cursor)
                 state = jobs.get_job(job_id, user)['status']
-            except (HTTPException, ForbiddenError, NotFoundError):
+            except (ApiError, ForbiddenError, NotFoundError):
                 yield 'event: access_expired\ndata: {}\n\n'
                 break
             for event in batch:

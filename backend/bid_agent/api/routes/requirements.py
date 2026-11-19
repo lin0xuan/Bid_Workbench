@@ -1,7 +1,8 @@
 """B07 draft API: extract and review structured requirements with evidence."""
 from collections import Counter
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -45,11 +46,11 @@ def extract_requirements(version_id: str, body: ExtractBody | None = None, user:
             llm_model=payload.llm_model,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
     except Exception as exc:
         message = str(exc)
         if payload.use_llm and ('api' in message.lower() or 'key' in message.lower() or 'auth' in message.lower()):
-            raise HTTPException(502, f'LLM 精抽失败：{message}') from exc
+            raise ApiError(502, f'LLM 精抽失败：{message}') from exc
         raise
     counts = dict(Counter(item['category'] for item in items))
     return {

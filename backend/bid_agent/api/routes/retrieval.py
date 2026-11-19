@@ -1,5 +1,6 @@
 """Evidence search and retrieval evaluation API (B10 draft)."""
-from fastapi import APIRouter, Depends, HTTPException
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -39,7 +40,7 @@ def rebuild_index(
     try:
         return evidence_search.rebuild_index(project_id, user, notes=payload.notes)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/projects/{project_id}/indexes')
@@ -54,7 +55,7 @@ def search_project(project_id: str, body: SearchBody, user: Principal = Depends(
             project_id, user, query=body.query, limit=body.limit,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.post('/projects/{project_id}/retrieval-eval')
@@ -67,4 +68,4 @@ def retrieval_eval(project_id: str, body: EvalBody, user: Principal = Depends(cu
             k=body.k,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc

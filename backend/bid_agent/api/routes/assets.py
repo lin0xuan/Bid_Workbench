@@ -1,8 +1,9 @@
 """Enterprise assets API (B09 draft)."""
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from bid_agent.core.errors import ApiError
+from bid_agent.http.routing import APIRouter, Depends, File, Form, Query, UploadFile
+from bid_agent.http.routing import FileResponse
 from pydantic import BaseModel, Field
 
 from bid_agent.core.identity import Principal
@@ -72,7 +73,7 @@ def create_asset(body: AssetCreateBody, user: Principal = Depends(current_user))
     try:
         return enterprise_assets.create_asset(user, **body.model_dump())
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/enterprise-assets/{asset_id}')
@@ -85,7 +86,7 @@ def patch_asset(asset_id: str, body: AssetPatchBody, user: Principal = Depends(c
     try:
         return enterprise_assets.update_asset(asset_id, user, **body.model_dump(exclude_unset=True))
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.post('/enterprise-assets/{asset_id}/versions', status_code=201)
@@ -100,9 +101,9 @@ def upload_version(
             asset_id, user, file_obj=file.file, filename=file.filename or '', notes=notes,
         )
     except FileTooLarge as exc:
-        raise HTTPException(413, str(exc)) from exc
+        raise ApiError(413, str(exc)) from exc
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.get('/enterprise-asset-versions/{version_id}/download')
@@ -137,7 +138,7 @@ def link_asset(project_id: str, asset_id: str, user: Principal = Depends(current
     try:
         return enterprise_assets.link_asset(project_id, asset_id, user)
     except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+        raise ApiError(400, str(exc)) from exc
 
 
 @router.delete('/projects/{project_id}/assets/{asset_id}')
