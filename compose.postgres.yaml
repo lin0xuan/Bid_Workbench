@@ -1,0 +1,61 @@
+# Opt in with: docker compose -f compose.yaml -f compose.postgres.yaml ...
+# DATABASE_URL must point to this postgres service (or use an externally managed
+# PostgreSQL deployment and its own coordinated backup/restore process).
+x-postgres-environment: &postgres-environment
+  DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for PostgreSQL deployment}
+  BID_AUTH_ENABLED: "true"
+  BID_ADMIN_USERNAME: ${BID_ADMIN_USERNAME:-}
+  BID_ADMIN_PASSWORD: ${BID_ADMIN_PASSWORD:-}
+  BID_COOKIE_SECURE: ${BID_COOKIE_SECURE:-true}
+  # env_file also contains owner credentials; explicitly keep them out of the app.
+  BID_MIGRATION_DATABASE_URL: ""
+  POSTGRES_PASSWORD: ""
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-m.daocloud.io/docker.io/library/postgres@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7}
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bid_owner}
+      POSTGRES_DB: ${POSTGRES_DB:-bid_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong PostgreSQL password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  migrate:
+    image: bid-agent-api:${BID_IMAGE_TAG:-local}
+    environment:
+      DATABASE_URL: ${BID_MIGRATION_DATABASE_URL:?Set the schema owner URL for migrations}
+      BID_RUNTIME_DATABASE_URL: ${DATABASE_URL:?Set the runtime PostgreSQL URL}
+    command: ["python", "-m", "bid_agent.infrastructure.db_migrations", "upgrade"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  api:
+    environment: *postgres-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  worker:
+    environment: *postgres-environment
+  dispatcher:
+    environment: *postgres-environment
+
+volumes:
+  postgres-data:

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>文档工作台 · 投标</title>
+  <link rel="stylesheet" href="./workspace.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./workspace.html"><span class="brand-mark">投</span><div>投标工作台<small>文档、版本与解析任务</small></div></a>
+    <nav><a id="legacyLink" href="./index.html" hidden>分析与标书工具 ↗</a><span id="identity" class="muted"></span><button id="logout" hidden>退出</button></nav>
+  </header>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <section id="loginPanel" class="login-card" hidden>
+    <p class="eyebrow">WORKSPACE</p><h1>登录工作空间</h1><p class="muted">使用管理员分配的账号访问项目和原件。</p>
+    <form id="loginForm"><label>用户名<input id="username" autocomplete="username" required maxlength="64" /></label>
+      <label>密码<input id="password" type="password" autocomplete="current-password" required maxlength="256" /></label>
+      <button class="primary" type="submit">登录</button></form>
+  </section>
+  <main id="workspace" class="layout" hidden>
+    <aside class="project-panel">
+      <div class="section-heading"><h2>项目</h2><span id="projectCount" class="badge">0</span></div>
+      <form id="projectForm"><label class="sr-only" for="projectTitle">新项目名称</label><input id="projectTitle" placeholder="输入新项目名称" required maxlength="200" /><button type="submit" class="primary">＋ 创建项目</button></form>
+      <div id="projectList" class="project-list"></div>
+    </aside>
+    <section class="main-panel">
+      <div id="emptyState" class="empty"><span class="empty-symbol">▧</span><h1>从一个项目开始</h1><p>保存招标原件，保留每个版本。解析任务在后台继续，刷新页面不会丢失。</p></div>
+      <div id="projectContent" hidden>
+        <div class="project-heading"><div><p class="eyebrow">DOCUMENT WORKSPACE</p><h1 id="activeTitle"></h1><p id="accessHint" class="muted"></p></div><button id="refresh">刷新</button></div>
+        <details id="membersPanel" class="card compact"><summary>项目成员</summary><form id="memberForm" class="inline-form"><input id="memberName" placeholder="已有用户名" required maxlength="64" aria-label="成员用户名" /><select id="memberRole" aria-label="成员权限"><option value="viewer">只读查看</option><option value="editor">编辑与解析</option></select><button type="submit">添加／更新成员</button></form></details>
+        <section class="card upload-card">
+          <div><h2>保存原件</h2><p class="muted">版本不可覆盖，可随时下载并核对原文件。支持 PDF、DOCX、图片与 HTML，单文件最多 50 MiB。</p></div>
+          <form id="uploadForm">
+            <div class="form-grid"><label>文件<input id="documentFile" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.html" required /></label>
+              <label>保存到<select id="targetDocument"><option value="">新建文档</option></select></label>
+              <label>文档类型<select id="documentKind"><option value="tender">招标文件</option><option value="clarification">澄清文件</option><option value="attachment">附件</option></select></label>
+              <label>关联原文档<select id="parentDocument"><option value="">无关联</option></select></label>
+              <label>解析方式<select id="parseMethod"><option value="auto">自动选择</option><option value="pdfplumber">本地 PDF 文本</option><option value="docx2python">本地 DOCX</option><option value="mineru_vlm">MinerU VLM</option><option value="mineru_pipeline">MinerU Pipeline</option><option value="mineru_html">MinerU HTML</option><option value="docling">本地 Docling（完整版）</option></select></label>
+              <label class="check"><input id="parseAfterUpload" type="checkbox" checked /> 保存后开始解析</label>
+            </div><div class="form-actions"><span id="uploadHint" class="muted">自动解析可能需要 MinerU 配置；本地 PDF／DOCX 无需模型密钥。</span><button id="uploadButton" class="primary" type="submit">保存原件并解析</button></div>
+          </form>
+        </section>
+        <section class="card"><div class="section-heading"><h2>文档与历史版本</h2><span id="documentCount" class="badge">0</span></div><div id="documents" class="documents"></div></section>
+        <section class="card"><div class="section-heading"><div><h2>解析任务</h2><p class="muted">任务进度每 3 秒更新；取消正在处理的任务需等待当前解析步骤结束。</p></div><span id="queueState" class="badge"></span></div><div id="jobs" class="jobs"></div></section>
+        <section id="resultPanel" class="card" hidden><div class="section-heading"><div><h2>解析结果</h2><p id="resultInfo" class="muted"></p></div><div class="actions"><button id="exportMarkdown">下载 Markdown</button><button id="reviewResult" class="primary" hidden>进入原工具核对 ↗</button></div></div>
+          <div id="resultWarnings" class="warning" hidden></div><div id="sections" class="sections"></div>
+          <details class="raw-result"><summary>查看统一结构、质量报告与来源标识</summary><pre id="structuredResult"></pre></details>
+        </section>
+        <section id="requirementsPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>要求清单</h2>
+              <p id="requirementsInfo" class="muted">解析成功后可抽取六类要求；点证据可跳到上方原文章节。</p>
+            </div>
+            <div class="actions">
+              <label class="check"><input id="useLlmRefine" type="checkbox" /> LLM 精抽（硅基流动）</label>
+              <button id="extractRequirements" class="primary" type="button">抽取／刷新</button>
+              <button id="reloadRequirements" type="button">重新加载</button>
+            </div>
+          </div>
+          <p id="llmHint" class="muted">默认规则抽取。勾选精抽需在 `.env` 配置 `LLM_API_KEY`；模型默认 DeepSeek V4.1 Flash。</p>
+          <div id="requirementFilters" class="requirement-filters" role="tablist" aria-label="要求类别"></div>
+          <div id="requirements" class="requirements"></div>
+        </section>
+        <section id="assetsPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>企业资产</h2>
+              <p id="assetsInfo" class="muted">资质／人员／财务／业绩等；过期材料不能默认用于生成，审查会标高风险。</p>
+            </div>
+            <div class="actions">
+              <button id="reloadAssets" type="button">刷新</button>
+            </div>
+          </div>
+          <form id="assetForm" class="form-grid">
+            <label>类别
+              <select id="assetCategory">
+                <option value="qualification">资质</option>
+                <option value="personnel">人员</option>
+                <option value="financial">财务</option>
+                <option value="performance">业绩</option>
+                <option value="case">案例</option>
+                <option value="template">模板素材</option>
+                <option value="other">其他</option>
+              </select>
+            </label>
+            <label>标题<input id="assetTitle" required maxlength="300" placeholder="如 ISO9001 证书" /></label>
+            <label>主体<input id="assetSubject" maxlength="200" placeholder="企业或人员名称" /></label>
+            <label>证书编号<input id="assetCertNo" maxlength="200" /></label>
+            <label>发证机关<input id="assetIssuer" maxlength="200" /></label>
+            <label>签发日<input id="assetIssuedOn" type="date" /></label>
+            <label>到期日<input id="assetExpiresOn" type="date" /></label>
+            <label>状态
+              <select id="assetStatus">
+                <option value="draft">草稿</option>
+                <option value="pending_review">待核实</option>
+                <option value="active">有效</option>
+                <option value="disabled">停用</option>
+              </select>
+            </label>
+            <label>附件<input id="assetFile" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp,.html" /></label>
+          </form>
+          <div class="actions" style="margin-top:12px">
+            <button id="createAsset" class="primary" type="button">创建并关联到本项目</button>
+          </div>
+          <div id="assetExpired" class="matrix-missing"></div>
+          <div id="assetList" class="asset-list"></div>
+        </section>
+        <section id="pipelinePanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>阶段闸门</h2>
+              <p class="muted">要求确认 → 目录 → 生成 → 审查 → 导出。未通过的阶段会阻断后续动作。</p>
+            </div>
+            <div class="actions">
+              <button id="reloadStages" type="button">刷新阶段</button>
+              <button id="reloadMineru" type="button">MinerU 状态</button>
+            </div>
+          </div>
+          <p id="mineruStatus" class="muted">MinerU：未检查</p>
+          <div id="stageList" class="stage-list"></div>
+        </section>
+        <section id="outlinePanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>评分对齐目录</h2>
+              <p id="outlineInfo" class="muted">需先通过「要求确认」闸门；从已抽取要求生成目录并计算评分覆盖率。</p>
+            </div>
+            <div class="actions">
+              <button id="buildOutline" class="primary" type="button">生成并保存目录</button>
+              <button id="reloadBids" type="button">刷新版本</button>
+            </div>
+          </div>
+          <pre id="outlinePreview" class="outline-preview"></pre>
+          <div id="bidVersions" class="bid-versions"></div>
+        </section>
+        <section id="sectionsPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>章节正文</h2>
+              <p id="sectionsInfo" class="muted">选用目录版本后编辑正文；保存写入服务端，刷新可恢复。导出 DOCX 使用已保存正文。</p>
+            </div>
+            <div class="actions">
+              <button id="reloadSections" type="button">刷新章节</button>
+            </div>
+          </div>
+          <div id="sectionList" class="section-edit-list"></div>
+          <div id="sectionEditor" class="section-editor" hidden>
+            <div class="section-heading">
+              <div>
+                <h3 id="sectionEditorTitle">章节</h3>
+                <p id="sectionEditorMeta" class="muted"></p>
+              </div>
+              <div class="actions">
+                <label class="check"><input id="markGenerateGate" type="checkbox" checked /> 保存时通过「章节生成」闸门</label>
+                <button id="seedSection" type="button">填入待补草稿</button>
+                <button id="generateEvidenceSection" type="button">证据约束生成</button>
+                <button id="saveSection" class="primary" type="button">保存本章</button>
+              </div>
+            </div>
+            <label>正文（Markdown）<textarea id="sectionBody" class="section-body" rows="12" placeholder="写入本章响应正文；缺少事实处用【待补充】"></textarea></label>
+          </div>
+        </section>
+        <section id="matrixPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>响应矩阵</h2>
+              <p id="matrixInfo" class="muted">要求 → 章节 → 状态；强制条款未闭环会出现在缺失材料清单，并写入 DOCX 附录。</p>
+            </div>
+            <div class="actions">
+              <button id="rebuildMatrix" class="primary" type="button">重建矩阵</button>
+              <button id="reloadMatrix" type="button">刷新</button>
+            </div>
+          </div>
+          <div id="matrixMissing" class="matrix-missing"></div>
+          <div id="matrixRows" class="matrix-rows"></div>
+        </section>
+        <section id="reviewPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>合规审查</h2>
+              <p id="reviewInfo" class="muted">高风险／严重项必须处理并留备注；未闭环不能通过检查闸门。处理过程写入审计。</p>
+            </div>
+            <div class="actions">
+              <label class="check"><input id="useLlmReview" type="checkbox" /> LLM 辅助</label>
+              <button id="runReview" class="primary" type="button">运行审查</button>
+              <button id="approveReview" type="button">批准最近审查</button>
+              <button id="reloadFindings" type="button">刷新发现</button>
+              <button id="reloadAudit" type="button">审计日志</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>处理备注<textarea id="reviewDecisionNotes" class="matrix-notes" rows="2" placeholder="接受／豁免／修复高风险项时必填"></textarea></label>
+            <label>筛选
+              <select id="findingFilter">
+                <option value="open">仅待处理</option>
+                <option value="all">全部</option>
+                <option value="high">高风险待处理</option>
+              </select>
+            </label>
+          </div>
+          <div id="reviewFindings" class="review-findings"></div>
+          <div id="auditLogs" class="audit-logs" hidden></div>
+        </section>
+        <section id="exportPanel" class="card" hidden>
+          <div class="section-heading">
+            <div>
+              <h2>DOCX 导出</h2>
+              <p id="exportInfo" class="muted">选择模板导出；默认需通过「合规审查」闸门。PDF 需本机／镜像安装 LibreOffice。</p>
+            </div>
+            <div class="actions">
+              <label class="check"><input id="forceExport" type="checkbox" /> 强制跳过闸门</label>
+              <label class="check"><input id="convertPdf" type="checkbox" /> 尝试转 PDF</label>
+              <button id="exportDocx" class="primary" type="button">导出当前目录版本</button>
+              <button id="reloadExports" type="button">刷新导出</button>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>导出模板<select id="exportTemplate"><option value="full">完整投标文件</option></select></label>
+            <label>投标人名称<input id="bidderName" maxlength="200" placeholder="可选，写入封面；暗标模板将隐藏" /></label>
+            <label>跳过备注<input id="exportNotes" maxlength="200" placeholder="强制跳过时填写" /></label>
+          </div>
+          <div id="exportList" class="export-list"></div>
+        </section>
+        <section id="eventsPanel" class="card" hidden><h2>任务事件</h2><p class="muted">保留排队、尝试次数、阶段、重试和取消的历史。</p><ol id="events" class="event-list"></ol></section>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./workspace.js"></script>
+</body>
+</html>
