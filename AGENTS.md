@@ -21,7 +21,9 @@ Bid_Agent/
 │   │   └── legacy-session.js    # 认证会话与 CSRF 共享
 │   └── desktop/                 # 可选 Electron 外壳（无本地拉起 Python）
 ├── backend/bid_agent/
-│   ├── main.py                  # FastAPI 入口、建表／迁移钩子、路由挂载
+│   ├── main.py                  # ASGI 入口、建表／迁移钩子
+│   ├── server/                  # 配置、路由装配、权限与维护页
+│   ├── apps/                    # 账号、项目、文档、任务、知识、标书只读模型
 │   ├── worker.py                # Celery 解析任务消费者
 │   ├── dispatcher.py            # outbox 发布与失联任务恢复
 │   ├── cli.py                   # 可选 Plan-and-Solve 命令行入口
@@ -80,6 +82,7 @@ PostgreSQL overlay 增加 postgres 与一次性 migrate；应用账号和 schema
 | 本轮已验证与未覆盖项 | [验证记录](docs/verification.md) |
 | 解析评测样例招标文件 | [docs/samples](docs/samples/README.md) |
 | 结构化入库目标表设计（后续） | [库表设计](docs/database/schema-design.md) |
+| 后台入口与数据所有权 | [后台迁移方案](docs/Django迁移方案.md) |
 
 人类快速上手见根 [README](README.md)。`docs/archive/` 与根 `archives/` 为历史资料，不作为开发基线。
 

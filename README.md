@@ -21,7 +21,9 @@ Bid_Agent/
 │   │   └── api.js              # 同源 /api 客户端
 │   └── desktop/                # 可选 Electron 外壳
 ├── backend/bid_agent/
-│   ├── main.py                 # FastAPI 入口与数据库初始化
+│   ├── main.py                 # ASGI 入口与数据库初始化
+│   ├── server/                 # 配置、路由装配与维护页
+│   ├── apps/                   # 业务表的只读模型
 │   ├── worker.py               # Celery 解析任务消费者
 │   ├── dispatcher.py           # outbox 发布及失联任务恢复
 │   ├── api/routes/             # auth／workspace／requirements／stages／bids／reviews…

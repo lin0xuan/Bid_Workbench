@@ -1,8 +1,9 @@
 """Recover stale jobs and publish the transactional outbox to Redis/Celery."""
 import logging
+import os
 import signal
-import threading
 import tempfile
+import threading
 from pathlib import Path
 
 from bid_agent.repositories import jobs
@@ -29,6 +30,12 @@ def dispatch_once(publish=None) -> bool:
 
 def main():
     logging.basicConfig(level=logging.INFO)
+    os.environ['BID_PROCESS_ROLE'] = 'dispatcher'
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bid_agent.server.settings')
+    import django
+    django.setup()
+    from bid_agent.server.bootstrap import assert_database_ready
+    assert_database_ready()
     stopped = threading.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stopped.set())

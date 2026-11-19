@@ -1,67 +1,47 @@
 """ASGI entry point: uvicorn bid_agent.main:app."""
-from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+import os
 
-# Load configuration before importing application modules.
-from bid_agent.core.settings import BUILD_VERSION, CORS_ORIGINS, ROOT_PATH
-from bid_agent.infrastructure.database import init_database
-from bid_agent.api.routes import (
-    assets,
-    auth,
-    bids,
-    documents,
-    health,
-    integrations,
-    knowledge,
-    projects,
-    requirements,
-    responses,
-    retrieval,
-    reviews,
-    stages,
-    workspace,
-)
-from bid_agent.core.security import bootstrap_identity, legacy_admin
-from bid_agent.repositories.platform import init_platform_schema, NotFoundError, ConflictError, ForbiddenError
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bid_agent.server.settings')
+os.environ.setdefault('BID_PROCESS_ROLE', 'api')
+
+import django
+
+django.setup()
+
+from bid_agent.core.settings import ROOT_PATH  # noqa: E402
+from bid_agent.server.bootstrap import bootstrap  # noqa: E402
+
+bootstrap()
+
+from bid_agent.server.asgi import application as _application  # noqa: E402
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_database()
-    init_platform_schema()
-    bootstrap_identity()
-    yield
+class _RootPath:
+    """Apply the public prefix when the process is mounted behind a proxy."""
+
+    def __init__(self, application):
+        self.application = application
+
+    async def __call__(self, scope, receive, send):
+        if scope.get('type') == 'lifespan':
+            await _accept_lifespan(receive, send)
+            return
+        http_scope = scope.get('type') in {'http', 'websocket'}
+        if http_scope and ROOT_PATH and not scope.get('root_path'):
+            scope = dict(scope)
+            scope['root_path'] = ROOT_PATH
+        await self.application(scope, receive, send)
 
 
-def create_app() -> FastAPI:
-    app = FastAPI(title='Bid Agent', version=BUILD_VERSION, lifespan=lifespan, root_path=ROOT_PATH)
-    if CORS_ORIGINS:
-        app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS,
-                           allow_credentials=False,
-                           allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-                           allow_headers=['Content-Type', 'X-CSRF-Token', 'Idempotency-Key'])
-    app.include_router(health.router)
-    app.include_router(auth.router)
-    app.include_router(workspace.router)
-    app.include_router(requirements.router)
-    app.include_router(stages.router)
-    app.include_router(bids.router)
-    app.include_router(responses.router)
-    app.include_router(reviews.router)
-    app.include_router(assets.router)
-    app.include_router(retrieval.router)
-    app.include_router(integrations.router)
-    for route in (documents.router, projects.router, knowledge.router):
-        app.include_router(route, dependencies=[Depends(legacy_admin)])
-
-    async def repository_error(request: Request, exc: Exception):
-        status = 404 if isinstance(exc, NotFoundError) else 403 if isinstance(exc, ForbiddenError) else 409
-        return JSONResponse(status_code=status, content={'detail': str(exc)})
-    for exception in (NotFoundError, ConflictError, ForbiddenError):
-        app.add_exception_handler(exception, repository_error)
-    return app
+async def _accept_lifespan(receive, send):
+    """The business schema is prepared at import, so startup only acknowledges."""
+    while True:
+        message = await receive()
+        if message['type'] == 'lifespan.startup':
+            await send({'type': 'lifespan.startup.complete'})
+        elif message['type'] == 'lifespan.shutdown':
+            await send({'type': 'lifespan.shutdown.complete'})
+            return
 
 
-app = create_app()
+app = _RootPath(_application)

@@ -21,10 +21,13 @@ app.conf.update(
 
 @worker_process_init.connect
 def initialize_worker(**kwargs):
-    # The API runs migrations before Compose starts workers. No schema writers here.
-    from bid_agent.core.settings import DB_PATH
-    if not DB_PATH.exists():
-        raise RuntimeError('Initialize the API database before starting workers')
+    # The API applies schema before Compose starts workers. No schema writers here.
+    os.environ['BID_PROCESS_ROLE'] = 'worker'
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'bid_agent.server.settings')
+    import django
+    django.setup()
+    from bid_agent.server.bootstrap import assert_database_ready
+    assert_database_ready()
 
 
 @app.task(name='bid_agent.parse_document', ignore_result=True)

@@ -12,6 +12,7 @@ os.environ['CHROMA_PERSIST_DIR'] = str(Path(_storage.name) / 'chroma')
 os.environ['BID_VECTOR_STORE_ENABLED'] = 'false'
 os.environ['RERANKER_ENABLED'] = 'false'
 os.environ['BID_ALLOW_SERVER_PATHS'] = 'false'
+os.environ['BID_AUTH_ENABLED'] = 'false'
 os.environ['LLM_API_KEY'] = ''
 os.environ['MINERU_API_TOKEN'] = ''
 # Never inherit a developer's production DATABASE_URL from their shell/.env.
@@ -24,8 +25,12 @@ def client():
     if os.environ['DATABASE_URL']:
         from bid_agent.infrastructure.db_migrations import upgrade
         upgrade()
-    from fastapi.testclient import TestClient
     from bid_agent.main import app
-    with TestClient(app) as client:
-        yield client
-    _storage.cleanup()
+    from django.db import connections
+    from starlette.testclient import TestClient
+    try:
+        with TestClient(app) as http:
+            yield http
+    finally:
+        connections.close_all()
+        _storage.cleanup()

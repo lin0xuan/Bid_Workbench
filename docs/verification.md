@@ -1,5 +1,9 @@
 # 0.3.0 验证记录
 
+## 2026-11-19 16:32：后台入口
+
+Windows Python 3.11.16，`python -m pytest -q` 为 **68 passed、4 skipped**。跳过的仍是未配置 `BID_TEST_DATABASE_URL` 的 PostgreSQL 用例。`ruff check backend tests scripts` 通过。未跑 Compose，未做浏览器验收，未连接生产库。细节见 [后台迁移验证](Django迁移验证.md)。
+
 ## 2026-11-18 19:21：PostgreSQL 切流实现与独立恢复验收
 
 本节是当前增量结果；下方 2026-11-02／11-06 记录保留为历史。没有迁移用户生产数据，也没有发布远程服务。仓库当前无 `.env` 或本地业务数据库，实际生产源库、目标部署与维护窗口仍待明确。
